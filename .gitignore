@@ -1,0 +1,13 @@
+dataset/somethingsomething/
+*.pyc
+*.out
+.vscode/launch.json
+results/
+SSV2_BB/annotation/
+SSV2_BB/data/
+*.json
+results/
+wandb/
+dataset/
+scripts/data/Epic-kitchen/data/
+scripts/data/Epic-kitchen/visual_bbx/

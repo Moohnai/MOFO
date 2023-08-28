@@ -1,0 +1,13 @@
+conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=11.1 -c pytorch -c conda-forge
+conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit=11.6 -c pytorch -c conda-forge
+pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
+DS_BUILD_OPS=1 pip install deepspeed
+pip install timm==0.4.12
+conda install -c conda-forge tensorboardx
+pip install decord
+conda install -c conda-forge einops
+pip install opencv-python
+pip install scipy
+pip install pandas
+conda install -c conda-forge mpi4py
+pip install -U albumentations
