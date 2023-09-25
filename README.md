@@ -57,7 +57,13 @@ MOFO† denotes the MOFO SSL and MOFO finetuning.
 | MOFO**   |  ***no***  |  ViT-B   |  224x224   |         16x2x3          | 74.0 | 68.0  | 54.5 |
 | MOFO†   |  ***no***  |  ViT-B   |  224x224   |         16x2x3          | 74.2  | 68.1 | 54.5 |
 
+## Pretrained Weights
 
+|  Method  | Data | Backbone | Resolution | Training Steps | Link |
+| :------: | :--------: | :------: | :--------: | :---------------------: | :---: |
+| MOFO*   |  SSV2  |  ViT-B   |  224x224   |         250         | [Link](https://drive.google.com/file/d/1OQ4CkQsf6DqEQOTec95MoiRQhZz_hKvx/view?usp=sharing) |
+| MOFO*   |  EPIC KITCHENS  |  ViT-B   |  224x224   |         250          | [Link](https://drive.google.com/file/d/1_PD1HmrPStm5I3-viz_d5Sx5955rd-Ao/view?usp=sharing)  |
+| MOFO*   |  EPIC KITCHENS  |  ViT-B   |  224x224   |         800          | [Link](https://drive.google.com/file/d/1krXW0T5UTiSfF0ZZgwzHgHxPzZIUpWpM/view?usp=sharing) |
 
 ##  Setup
 We used Python 3.8.13 and PyTorch 1.12.0 to train and test our models.
