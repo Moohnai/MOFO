@@ -11,3 +11,4 @@ wandb/
 dataset/
 scripts/data/Epic-kitchen/data/
 scripts/data/Epic-kitchen/visual_bbx/
+*.pth

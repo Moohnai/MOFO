@@ -408,6 +408,17 @@ class VisionTransformer(nn.Module):
         x = self.head(x)
         return x
 
+class VisionTransformer_feat_ext(VisionTransformer):
+    """ Vision Transformer with support for patch or hybrid CNN input stage
+    """
+    def __init__(self, 
+                 **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        return x
+
 class VisionTransformer_BB_focused(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
@@ -634,6 +645,14 @@ def vit_small_patch16_224(pretrained=False, **kwargs):
 @register_model
 def vit_base_patch16_224(pretrained=False, **kwargs):
     model = VisionTransformer(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+    return model
+
+@register_model
+def vit_base_patch16_224_feature_ext(pretrained=False, **kwargs):
+    model = VisionTransformer_feat_ext(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
