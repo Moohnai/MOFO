@@ -65,6 +65,12 @@ MOFO† denotes the MOFO SSL and MOFO finetuning.
 | MOFO*   |  EPIC KITCHENS  |  ViT-B   |  224x224   |         250          | [Link](https://drive.google.com/file/d/1_PD1HmrPStm5I3-viz_d5Sx5955rd-Ao/view?usp=sharing)  |
 | MOFO*   |  EPIC KITCHENS  |  ViT-B   |  224x224   |         800          | [Link](https://drive.google.com/file/d/1krXW0T5UTiSfF0ZZgwzHgHxPzZIUpWpM/view?usp=sharing) |
 
+## Pretrained Weights
+|  Method  | Data | Backbone | Training Steps | Finetuning step | Link |
+| :------: | :--------: | :------: | :--------: | :---------------------: | :---: |
+| MOFO†   |  EPIC KITCHENS (action) |  ViT-B   |  200   |         100          | [Link](https://drive.google.com/file/d/1GSXrt7ok_c81jzjS4k1iyKQ1jth5R5uK/view?usp=sharing)|
+| MOFO†   |  EPIC SSV2  |  ViT-B   |  200   |         100          |[Link](https://drive.google.com/file/d/1xS2Dww6KZLEUNZTo8FWJpGbIvgi6onAC/view?usp=sharing)|
+
 ##  Setup
 We used Python 3.8.13 and PyTorch 1.12.0 to train and test our models.
 
