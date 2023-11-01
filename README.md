@@ -69,7 +69,7 @@ MOFO† denotes the MOFO SSL and MOFO finetuning.
 |  Method  | Data | Backbone | Training Steps | Finetuning step | Link |
 | :------: | :--------: | :------: | :--------: | :---------------------: | :---: |
 | MOFO†   |  EPIC KITCHENS (action) |  ViT-B   |  200   |         100          | [Link](https://drive.google.com/file/d/1GSXrt7ok_c81jzjS4k1iyKQ1jth5R5uK/view?usp=sharing)|
-| MOFO†   |  EPIC SSV2  |  ViT-B   |  200   |         100          |[Link](https://drive.google.com/file/d/1xS2Dww6KZLEUNZTo8FWJpGbIvgi6onAC/view?usp=sharing)|
+| MOFO†   |   SSV2  |  ViT-B   |  200   |         100          |[Link](https://drive.google.com/file/d/1xS2Dww6KZLEUNZTo8FWJpGbIvgi6onAC/view?usp=sharing)|
 
 ##  Setup
 We used Python 3.8.13 and PyTorch 1.12.0 to train and test our models.
