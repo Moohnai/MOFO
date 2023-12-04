@@ -190,6 +190,8 @@ def validation_one_epoch(data_loader, model, device, args=None):
             output = model(videos)
             loss = criterion(output, target)
 
+        batch_size = videos.shape[0]
+
         if args.data_set =="Epic-Kitchens":
             output = torch.softmax(output, dim=1)
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -204,7 +206,6 @@ def validation_one_epoch(data_loader, model, device, args=None):
         else:
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
-        batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
@@ -267,6 +268,8 @@ def final_test(data_loader, model, device, file, args=None):
             target_to_noun = torch.tensor([args.mapping_act2n[a] for a in target.tolist()]).to(device, non_blocking=True)
             acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
             acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+            metric_logger.meters['acc1_verb'].update(acc1_verb.item(), n=batch_size)
+            metric_logger.meters['acc1_noun'].update(acc1_noun.item(), n=batch_size)
         else:
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
@@ -274,8 +277,6 @@ def final_test(data_loader, model, device, file, args=None):
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
-        metric_logger.meters['acc1_verb'].update(acc1_verb.item(), n=batch_size)
-        metric_logger.meters['acc1_noun'].update(acc1_noun.item(), n=batch_size)
 
     if not os.path.exists(file):
         os.mknod(file)
@@ -522,6 +523,8 @@ def validation_one_epoch_BB_focused(data_loader, model, device, args=None):
             output = model(videos, bbox)
             loss = criterion(output, target)
 
+        batch_size = videos.shape[0]
+
         if args.data_set =="Epic-Kitchens":
             output = torch.softmax(output, dim=1)
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
@@ -533,10 +536,11 @@ def validation_one_epoch_BB_focused(data_loader, model, device, args=None):
             target_to_noun = torch.tensor([args.mapping_act2n[a] for a in target.tolist()]).to(device, non_blocking=True)
             acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
             acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+            metric_logger.meters['acc1_verb'].update(acc1_verb.item(), n=batch_size)
+            metric_logger.meters['acc1_noun'].update(acc1_noun.item(), n=batch_size)
         else:
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
-        batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
