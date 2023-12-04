@@ -24,7 +24,7 @@ def get_loss_scale_for_deepspeed(model):
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
+                    device: torch.device, epoch: int, loss_scaler, args, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None, log_writer=None,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
                     num_training_steps_per_epoch=None, update_freq=None):
@@ -106,8 +106,26 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             class_acc = (output.max(-1)[-1] == targets).float().mean()
         else:
             class_acc = None
+
+        output = torch.softmax(output, dim=1)
+        targets = targets.argmax(dim=1)
+        acc1, acc5 = accuracy(output, targets, topk=(1, 5))
+        if args.data_set =="Epic-Kitchens":
+            vi = utils.get_marginal_indexes(args.actions, 'verb')
+            ni = utils.get_marginal_indexes(args.actions, 'noun')
+            verb_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), vi)).to(device, non_blocking=True)
+            noun_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), ni)).to(device, non_blocking=True)
+            target_to_verb = torch.tensor([args.mapping_act2v[a] for a in targets.tolist()]).to(device, non_blocking=True)
+            target_to_noun = torch.tensor([args.mapping_act2n[a] for a in targets.tolist()]).to(device, non_blocking=True)
+            acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
+            acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+            metric_logger.update(verb_acc=acc1_verb.item())
+            metric_logger.update(noun_acc=acc1_noun.item())
+
         metric_logger.update(loss=loss_value)
-        metric_logger.update(class_acc=class_acc)
+        # metric_logger.update(class_acc=class_acc)
+        metric_logger.update(acc1=acc1.item())
+        metric_logger.update(acc5=acc5.item())
         metric_logger.update(loss_scale=loss_scale_value)
         min_lr = 10.
         max_lr = 0.
@@ -124,7 +142,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         metric_logger.update(weight_decay=weight_decay_value)
         metric_logger.update(grad_norm=grad_norm)
 
-        # log to weights & biases
+        # # log to weights & biases
         # wandb_dict = {}
         # for key, value in metric_logger.meters.items():
         #     wandb_dict["train_iter_"+key] = value.global_avg
@@ -138,6 +156,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             log_writer.update(min_lr=min_lr, head="opt")
             log_writer.update(weight_decay=weight_decay_value, head="opt")
             log_writer.update(grad_norm=grad_norm, head="opt")
+            log_writer.update(verb_acc=acc1_verb.item(), head="verb_acc")
+            log_writer.update(noun_acc=acc1_noun.item(), head="noun_acc")
+            log_writer.update(acc1=acc1.item(), head="acc1")
+            log_writer.update(acc5=acc5.item(), head="acc5")
 
             log_writer.set_step()
 
@@ -148,7 +170,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def validation_one_epoch(data_loader, model, device):
+def validation_one_epoch(data_loader, model, device, args=None):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -168,16 +190,34 @@ def validation_one_epoch(data_loader, model, device):
             output = model(videos)
             loss = criterion(output, target)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        if args.data_set =="Epic-Kitchens":
+            output = torch.softmax(output, dim=1)
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            vi = utils.get_marginal_indexes(args.actions, 'verb')
+            ni = utils.get_marginal_indexes(args.actions, 'noun')
+            verb_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), vi)).to(device, non_blocking=True)
+            noun_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), ni)).to(device, non_blocking=True)
+            target_to_verb = torch.tensor([args.mapping_act2v[a] for a in target.tolist()]).to(device, non_blocking=True)
+            target_to_noun = torch.tensor([args.mapping_act2n[a] for a in target.tolist()]).to(device, non_blocking=True)
+            acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
+            acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+        else:
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
         batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+        metric_logger.meters['acc1_verb'].update(acc1_verb.item(), n=batch_size)
+        metric_logger.meters['acc1_noun'].update(acc1_noun.item(), n=batch_size)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+    if args.data_set =="Epic-Kitchens":
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} Acc@1_verb {top1_verb.global_avg:.3f} Acc@1_noun {top1_noun.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, top1_verb=metric_logger.acc1_verb, top1_noun=metric_logger.acc1_noun, losses=metric_logger.loss))
+    else:
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
@@ -216,12 +256,26 @@ def final_test(data_loader, model, device, file, args=None):
                                                 str(int(split_nb[i].cpu().numpy())))
             final_result.append(string)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        if args.data_set =="Epic-Kitchens":
+            output = torch.softmax(output, dim=1)
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            vi = utils.get_marginal_indexes(args.actions, 'verb')
+            ni = utils.get_marginal_indexes(args.actions, 'noun')
+            verb_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), vi)).to(device, non_blocking=True)
+            noun_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), ni)).to(device, non_blocking=True)
+            target_to_verb = torch.tensor([args.mapping_act2v[a] for a in target.tolist()]).to(device, non_blocking=True)
+            target_to_noun = torch.tensor([args.mapping_act2n[a] for a in target.tolist()]).to(device, non_blocking=True)
+            acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
+            acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+        else:
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
         batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+        metric_logger.meters['acc1_verb'].update(acc1_verb.item(), n=batch_size)
+        metric_logger.meters['acc1_noun'].update(acc1_noun.item(), n=batch_size)
 
     if not os.path.exists(file):
         os.mknod(file)
@@ -231,8 +285,12 @@ def final_test(data_loader, model, device, file, args=None):
             f.write(line)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+    if args.data_set =="Epic-Kitchens":
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} Acc@1_verb {top1_verb.global_avg:.3f} Acc@1_noun {top1_noun.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, top1_verb=metric_logger.acc1_verb, top1_noun=metric_logger.acc1_noun, losses=metric_logger.loss))
+    else:
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
@@ -297,7 +355,7 @@ def train_class_batch_BB_focused(model, samples, bboxs, target, criterion):
 
 def train_one_epoch_BB_focused(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
+                    device: torch.device, epoch: int, loss_scaler,  args, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None, log_writer=None,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
                     num_training_steps_per_epoch=None, update_freq=None):
@@ -379,8 +437,26 @@ def train_one_epoch_BB_focused(model: torch.nn.Module, criterion: torch.nn.Modul
             class_acc = (output.max(-1)[-1] == targets).float().mean()
         else:
             class_acc = None
+
+        output = torch.softmax(output, dim=1)
+        targets = targets.argmax(dim=1)
+        acc1, acc5 = accuracy(output, targets, topk=(1, 5))
+        if args.data_set =="Epic-Kitchens":
+            vi = utils.get_marginal_indexes(args.actions, 'verb')
+            ni = utils.get_marginal_indexes(args.actions, 'noun')
+            verb_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), vi)).to(device, non_blocking=True)
+            noun_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), ni)).to(device, non_blocking=True)
+            target_to_verb = torch.tensor([args.mapping_act2v[a] for a in targets.tolist()]).to(device, non_blocking=True)
+            target_to_noun = torch.tensor([args.mapping_act2n[a] for a in targets.tolist()]).to(device, non_blocking=True)
+            acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
+            acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+            metric_logger.update(verb_acc=acc1_verb.item())
+            metric_logger.update(noun_acc=acc1_noun.item())
+
         metric_logger.update(loss=loss_value)
-        metric_logger.update(class_acc=class_acc)
+        # metric_logger.update(class_acc=class_acc)
+        metric_logger.update(acc1=acc1.item())
+        metric_logger.update(acc5=acc5.item())
         metric_logger.update(loss_scale=loss_scale_value)
         min_lr = 10.
         max_lr = 0.
@@ -397,7 +473,7 @@ def train_one_epoch_BB_focused(model: torch.nn.Module, criterion: torch.nn.Modul
         metric_logger.update(weight_decay=weight_decay_value)
         metric_logger.update(grad_norm=grad_norm)
 
-        # log to weights & biases
+        # # log to weights & biases
         # wandb_dict = {}
         # for key, value in metric_logger.meters.items():
         #     wandb_dict["train_iter_"+key] = value.global_avg
@@ -411,6 +487,10 @@ def train_one_epoch_BB_focused(model: torch.nn.Module, criterion: torch.nn.Modul
             log_writer.update(min_lr=min_lr, head="opt")
             log_writer.update(weight_decay=weight_decay_value, head="opt")
             log_writer.update(grad_norm=grad_norm, head="opt")
+            log_writer.update(verb_acc=acc1_verb.item(), head="verb_acc")
+            log_writer.update(noun_acc=acc1_noun.item(), head="noun_acc")
+            log_writer.update(acc1=acc1.item(), head="acc1")
+            log_writer.update(acc5=acc5.item(), head="acc5")
 
             log_writer.set_step()
 
@@ -421,7 +501,7 @@ def train_one_epoch_BB_focused(model: torch.nn.Module, criterion: torch.nn.Modul
 
 
 @torch.no_grad()
-def validation_one_epoch_BB_focused(data_loader, model, device):
+def validation_one_epoch_BB_focused(data_loader, model, device, args=None):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -442,7 +522,19 @@ def validation_one_epoch_BB_focused(data_loader, model, device):
             output = model(videos, bbox)
             loss = criterion(output, target)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        if args.data_set =="Epic-Kitchens":
+            output = torch.softmax(output, dim=1)
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            vi = utils.get_marginal_indexes(args.actions, 'verb')
+            ni = utils.get_marginal_indexes(args.actions, 'noun')
+            verb_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), vi)).to(device, non_blocking=True)
+            noun_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), ni)).to(device, non_blocking=True)
+            target_to_verb = torch.tensor([args.mapping_act2v[a] for a in target.tolist()]).to(device, non_blocking=True)
+            target_to_noun = torch.tensor([args.mapping_act2n[a] for a in target.tolist()]).to(device, non_blocking=True)
+            acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
+            acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+        else:
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
         batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())
@@ -450,8 +542,12 @@ def validation_one_epoch_BB_focused(data_loader, model, device):
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+    if args.data_set =="Epic-Kitchens":
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} Acc@1_verb {top1_verb.global_avg:.3f} Acc@1_noun {top1_noun.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, top1_verb=metric_logger.acc1_verb, top1_noun=metric_logger.acc1_noun, losses=metric_logger.loss))
+    else:
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
@@ -491,12 +587,26 @@ def final_test_BB_focused(data_loader, model, device, file, args=None):
                                                 str(int(split_nb[i].cpu().numpy())))
             final_result.append(string)
 
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        if args.data_set =="Epic-Kitchens":
+            output = torch.softmax(output, dim=1)
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            vi = utils.get_marginal_indexes(args.actions, 'verb')
+            ni = utils.get_marginal_indexes(args.actions, 'noun')
+            verb_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), vi)).to(device, non_blocking=True)
+            noun_scores = torch.tensor(utils.marginalize(output.detach().cpu().numpy(), ni)).to(device, non_blocking=True)
+            target_to_verb = torch.tensor([args.mapping_act2v[a] for a in target.tolist()]).to(device, non_blocking=True)
+            target_to_noun = torch.tensor([args.mapping_act2n[a] for a in target.tolist()]).to(device, non_blocking=True)
+            acc1_verb, _ = accuracy(verb_scores, target_to_verb, topk=(1, 5))
+            acc1_noun, _ = accuracy(noun_scores, target_to_noun, topk=(1, 5))
+        else:
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
         batch_size = videos.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.meters['acc1'].update(acc1.item(), n=batch_size)
         metric_logger.meters['acc5'].update(acc5.item(), n=batch_size)
+        metric_logger.meters['acc1_verb'].update(acc1_verb.item(), n=batch_size)
+        metric_logger.meters['acc1_noun'].update(acc1_noun.item(), n=batch_size)
 
     if not os.path.exists(file):
         os.mknod(file)
@@ -506,7 +616,11 @@ def final_test_BB_focused(data_loader, model, device, file, args=None):
             f.write(line)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
-          .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+    if args.data_set =="Epic-Kitchens":
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} Acc@1_verb {top1_verb.global_avg:.3f} Acc@1_noun {top1_noun.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, top1_verb=metric_logger.acc1_verb, top1_noun=metric_logger.acc1_noun, losses=metric_logger.loss))
+    else:
+        print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'
+            .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

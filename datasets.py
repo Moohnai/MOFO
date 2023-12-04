@@ -4,7 +4,7 @@ from transforms import *
 from masking_generator import TubeMaskingGenerator, TubeMaskingGenerator_BB
 from kinetics import VideoClsDataset, VideoMAE, VideoMAE_BB, VideoMAE_BB_no_global_union
 from ssv2 import SSVideoClsDataset
-from epic_kitchens import EpicVideoClsDataset, EpicVideoClsDataset_BB_focused
+from epic_kitchens import EpicVideoClsDataset, EpicVideoClsDataset_BB_focused, VideoClassyDataset, VideoClassyDataset_BB
 
 
 class DataAugmentationForVideoMAE(object):
@@ -181,35 +181,50 @@ def build_dataset(is_train, test_mode, args):
         anno_path = None
         if is_train is True:
             mode = 'train'
-            anno_path = os.path.join(args.data_path, 'train.csv')
+            anno_path = os.path.join(args.data_path, 'EPIC_100_train.csv')
+            num_clips = args.num_segments
             # anno_path = args.data_path
         elif test_mode is True:
             mode = 'test'
-            anno_path = os.path.join(args.data_path, 'val.csv') 
+            anno_path = os.path.join(args.data_path, 'EPIC_100_validation.csv') 
+            num_clips = args.test_num_segment
             
         else:  
             mode = 'validation'
-            anno_path = os.path.join(args.data_path, 'val.csv') 
+            anno_path = os.path.join(args.data_path, 'EPIC_100_validation.csv')
             # anno_path = args.eval_data_path 
+            num_clips = args.test_num_segment
 
 
-        dataset = EpicVideoClsDataset(
-            classtype=args.classtype,
+        # dataset = EpicVideoClsDataset(
+        #     classtype=args.classtype,
+        #     anno_path=anno_path,
+        #     data_path='/',
+        #     mode=mode,
+        #     clip_len=args.num_frames,
+        #     num_segment=args.num_frames,
+        #     test_num_segment=args.test_num_segment,
+        #     test_num_crop=args.test_num_crop,
+        #     num_crop=1 if not test_mode else 3,
+        #     keep_aspect_ratio=True,
+        #     crop_size=args.input_size,
+        #     short_side_size=args.short_side_size,
+        #     new_height=256,
+        #     new_width=320,
+        #     args=args,
+        #     )
+
+        dataset = VideoClassyDataset(
+            args.data_set, 
             anno_path=anno_path,
-            data_path='/',
+            num_clips=num_clips,
+            clip_length=args.num_frames, 
+            clip_stride=args.sampling_rate,
+            threads=1,
             mode=mode,
-            clip_len=args.num_frames,
-            num_segment=args.num_frames,
-            test_num_segment=args.test_num_segment,
-            test_num_crop=args.test_num_crop,
-            num_crop=1 if not test_mode else 3,
-            keep_aspect_ratio=True,
-            crop_size=args.input_size,
-            short_side_size=args.short_side_size,
-            new_height=256,
-            new_width=320,
             args=args,
             )
+        
         nb_classes = args.nb_classes        
 
     elif args.data_set == 'UCF101':
@@ -369,33 +384,47 @@ def build_dataset_BB_focused(is_train, test_mode, args):
         anno_path = None
         if is_train is True:
             mode = 'train'
-            anno_path = os.path.join(args.data_path, 'train.csv')
+            anno_path = os.path.join(args.data_path, 'EPIC_100_train.csv')
+            num_clips = args.num_segments
             # anno_path = args.data_path
         elif test_mode is True:
             mode = 'test'
-            anno_path = os.path.join(args.data_path, 'val.csv') 
+            anno_path = os.path.join(args.data_path, 'EPIC_100_validation.csv') 
+            num_clips = args.test_num_segment
             
         else:  
             mode = 'validation'
-            anno_path = os.path.join(args.data_path, 'val.csv') 
+            anno_path = os.path.join(args.data_path, 'EPIC_100_validation.csv')
             # anno_path = args.eval_data_path 
+            num_clips = args.test_num_segment
 
 
-        dataset = EpicVideoClsDataset_BB_focused(
-            classtype=args.classtype,
+        # dataset = EpicVideoClsDataset_BB_focused(
+        #     classtype=args.classtype,
+        #     anno_path=anno_path,
+        #     data_path='/',
+        #     mode=mode,
+        #     clip_len=args.num_frames,
+        #     num_segment=args.num_frames,
+        #     test_num_segment=args.test_num_segment,
+        #     test_num_crop=args.test_num_crop,
+        #     num_crop=1 if not test_mode else 3,
+        #     keep_aspect_ratio=True,
+        #     crop_size=args.input_size,
+        #     short_side_size=args.short_side_size,
+        #     new_height=256,
+        #     new_width=320,
+        #     args=args,
+        #     )
+        
+        dataset = VideoClassyDataset_BB(
+            args.data_set, 
             anno_path=anno_path,
-            data_path='/',
+            num_clips=num_clips,
+            clip_length=args.num_frames, 
+            clip_stride=args.sampling_rate,
+            threads=1,
             mode=mode,
-            clip_len=args.num_frames,
-            num_segment=args.num_frames,
-            test_num_segment=args.test_num_segment,
-            test_num_crop=args.test_num_crop,
-            num_crop=1 if not test_mode else 3,
-            keep_aspect_ratio=True,
-            crop_size=args.input_size,
-            short_side_size=args.short_side_size,
-            new_height=256,
-            new_width=320,
             args=args,
             )
         nb_classes = args.nb_classes        

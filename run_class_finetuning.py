@@ -2,6 +2,8 @@ import argparse
 import datetime
 import numpy as np
 import time
+
+import pandas as pd
 import torch
 import torch.backends.cudnn as cudnn
 import json
@@ -18,7 +20,7 @@ from optim_factory import create_optimizer, get_parameter_groups, LayerDecayValu
 
 from datasets import build_dataset
 from engine_for_finetuning import train_one_epoch, validation_one_epoch, final_test, merge
-from utils import NativeScalerWithGradNormCount as NativeScaler
+from utils import NativeScalerWithGradNormCount as NativeScaler, generate_label_map
 from utils import  multiple_samples_collate, _load_checkpoint_for_ema
 import utils
 import modeling_finetune
@@ -28,7 +30,7 @@ import random
 
 def get_args():
     parser = argparse.ArgumentParser('VideoMAE fine-tuning and evaluation script for video classification', add_help=False)
-    parser.add_argument('--batch_size', default=8, type=int)
+    parser.add_argument('--batch_size', default=10, type=int)
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--update_freq', default=1, type=int)
     parser.add_argument('--save_ckpt_freq', default=10, type=int)
@@ -98,7 +100,7 @@ def get_args():
     # Evaluation parameters
     parser.add_argument('--crop_pct', type=float, default=None)
     parser.add_argument('--short_side_size', type=int, default=224)
-    parser.add_argument('--test_num_segment', type=int, default=2)
+    parser.add_argument('--test_num_segment', type=int, default=1)
     parser.add_argument('--test_num_crop', type=int, default=3)
     
     # Random Erase params
@@ -126,9 +128,9 @@ def get_args():
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
     # Finetuning params
-    parser.add_argument('--finetune', default='/home/mona/VideoMAE/results/Final_pretrain_original_videoMAE_SSV2_whole_classes/checkpoint-199.pth', 
+    parser.add_argument('--finetune', default='/home/mona/MOFO/results/ek_videomae/checkpoint-799.pth', 
                         help='finetune from checkpoint')
-    # parser.add_argument('--finetune', default='home', 
+    # parser.add_argument('--finetune', default=None, 
     #                     help='finetune from checkpoint')
     parser.add_argument('--model_key', default='model|module', type=str)
     parser.add_argument('--model_prefix', default='', type=str)
@@ -138,25 +140,25 @@ def get_args():
     parser.add_argument('--use_cls', action='store_false', dest='use_mean_pooling')
 
     parser.add_argument('--early_stopping', default=True, type=bool, help='early stopping')
-    parser.add_argument('--early_stopping_patience', default=10, type=int, help='early stopping patience')
+    parser.add_argument('--early_stopping_patience', default=100, type=int, help='early stopping patience')
 
 
     # Dataset parameters99
-    parser.add_argument('--data_path', default='/home/mona/VideoMAE/dataset/Epic_kitchen/annotation/verb/', type=str,
+    parser.add_argument('--data_path', default='/home/mona/MOFO/dataset/Epic_kitchen/annotation/', type=str,
                         help='dataset path')
-    parser.add_argument('--eval_data_path', default='/home/mona/VideoMAE/dataset/Epic_kitchen/annotation/verb/val.csv', type=str,
+    parser.add_argument('--eval_data_path', default='/home/mona/MOFO/dataset/Epic_kitchen/annotation/verb/val.csv', type=str,
                         help='dataset path for evaluation')
-    parser.add_argument('--nb_classes', default=97, type=int,
+    parser.add_argument('--nb_classes', default=3806, type=int,
                         help='number of the classification types')
     parser.add_argument('--imagenet_default_mean_and_std', default=True, action='store_true')
     parser.add_argument('--num_segments', type=int, default= 1)
     parser.add_argument('--num_frames', type=int, default= 16)
-    parser.add_argument('--sampling_rate', type=int, default= 4)
+    parser.add_argument('--sampling_rate', type=int, default= 2)
     parser.add_argument('--data_set', default='Epic-Kitchens', choices=['Epic-Kitchens', 'Kinetics-400', 'SSV2', 'UCF101', 'HMDB51','image_folder'],
                         type=str, help='dataset')
-    parser.add_argument('--output_dir', default='/home/mona/VideoMAE/results/Final_finetune_all_verbclasses_ON_Epic_kitchen_pretrained_200epoch_original_videoMAE_SSV2_early_stopping',
+    parser.add_argument('--output_dir', default='/home/mona/MOFO/results/test',
                         help='path where to save, empty for no saving')
-    parser.add_argument('--log_dir', default='/home/mona/VideoMAE/results/Final_finetune_all_verbclasses_ON_Epic_kitchen_pretrained_200epoch_original_videoMAE_SSV2_early_stopping',
+    parser.add_argument('--log_dir', default='/home/mona/MOFO/results/test',
                         help='path where to tensorboard log')
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
@@ -242,6 +244,12 @@ def main(args, ds_init):
     seed_everything(seed=args.seed)
 
     cudnn.benchmark = True
+    if args.data_set == 'Epic-Kitchens':
+        _, mapping_vn2act = generate_label_map(args.data_path)
+        args.mapping_act2v = {i: int(vn.split(':')[0]) for (vn, i) in mapping_vn2act.items()}
+        args.mapping_act2n = {i: int(vn.split(':')[1]) for (vn, i) in mapping_vn2act.items()}
+        args.actions = pd.DataFrame.from_dict({'verb': args.mapping_act2v.values(), 'noun': args.mapping_act2n.values()})
+        args.mapping_vn2act = mapping_vn2act
 
     dataset_train, args.nb_classes = build_dataset(is_train=True, test_mode=False, args=args)
     if args.disable_eval_during_finetuning:
@@ -510,9 +518,9 @@ def main(args, ds_init):
     
     #initialize wandb
     wandb.init(
-        project="Final_Epic_CrossValidation",
+        project="New_Epic_CrossValidation",
         group="finetune",
-        name="Final_finetune_all_verb_classes_ON_Epic_kitchen_pretrained_200epoch_original_videoMAE_SSV2_early_stopping",
+        name="Final_finetune_all_avion",
         config=args,
         )
     
@@ -525,7 +533,7 @@ def main(args, ds_init):
             log_writer.set_step(epoch * num_training_steps_per_epoch * args.update_freq)
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer,
-            device, epoch, loss_scaler, args.clip_grad, model_ema, mixup_fn,
+            device, epoch, loss_scaler, args, args.clip_grad, model_ema, mixup_fn,
             log_writer=log_writer, start_steps=epoch * num_training_steps_per_epoch,
             lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
             num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
@@ -543,7 +551,7 @@ def main(args, ds_init):
                     args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                     loss_scaler=loss_scaler, epoch=epoch, model_ema=model_ema)
         if data_loader_val is not None:
-            test_stats = validation_one_epoch(data_loader_val, model, device)
+            test_stats = validation_one_epoch(data_loader_val, model, device, args)
 
             # wandb log
             wandb_dict = {}

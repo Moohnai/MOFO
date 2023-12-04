@@ -1,3 +1,4 @@
+import csv
 import io
 import os
 import math
@@ -12,7 +13,8 @@ from pathlib import Path
 import subprocess
 import torch
 import torch.distributed as dist
-from torch._six import inf
+# from torch._six import inf
+from torch import inf
 import random
 
 from tensorboardX import SummaryWriter
@@ -548,3 +550,57 @@ def multiple_samples_collate(batch, fold=False):
         return [inputs], labels, video_idx, extra_data
     else:
         return inputs, labels, video_idx, extra_data
+
+
+
+def generate_label_map(data_path):
+    
+    print("Preprocess ek100 action label space")
+    vn_list = []
+    mapping_vn2narration = {}
+    for f in [
+        os.path.join(data_path, 'EPIC_100_train.csv'),
+        os.path.join(data_path, 'EPIC_100_validation.csv'),
+    ]:
+        csv_reader = csv.reader(open(f))
+        _ = next(csv_reader)  # skip the header
+        for row in csv_reader:
+            vn = '{}:{}'.format(int(row[10]), int(row[12]))
+            narration = row[8]
+            if vn not in vn_list:
+                vn_list.append(vn)
+            if vn not in mapping_vn2narration:
+                mapping_vn2narration[vn] = [narration]
+            else:
+                mapping_vn2narration[vn].append(narration)
+            # mapping_vn2narration[vn] = [narration]
+    vn_list = sorted(vn_list)
+    print('# of action= {}'.format(len(vn_list)))
+    mapping_vn2act = {vn: i for i, vn in enumerate(vn_list)}
+    labels = [list(set(mapping_vn2narration[vn_list[i]])) for i in range(len(mapping_vn2act))]
+
+    return labels, mapping_vn2act
+
+def get_marginal_indexes(actions, mode):
+    """For each verb/noun retrieve the list of actions containing that verb/name
+        Input:
+            mode: "verb" or "noun"
+        Output:
+            a list of numpy array of indexes. If verb/noun 3 is contained in actions 2,8,19,
+            then output[3] will be np.array([2,8,19])
+    """
+    vi = []
+    for v in range(actions[mode].max()+1):
+        vals = actions[actions[mode] == v].index.values
+        if len(vals) > 0:
+            vi.append(vals)
+        else:
+            vi.append(np.array([0]))
+    return vi
+
+
+def marginalize(probs, indexes):
+    mprobs = []
+    for ilist in indexes:
+        mprobs.append(probs[:, ilist].sum(1))
+    return np.array(mprobs).T
