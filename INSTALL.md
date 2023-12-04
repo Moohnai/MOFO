@@ -8,7 +8,8 @@ The codebase is mainly built with following libraries:
   We can successfully reproduce the main results under two settings below:<br>
   Tesla **A100** (40G): CUDA 11.1 + PyTorch 1.8.0 + torchvision 0.9.0<br>
   Tesla **V100** (32G): CUDA 10.1 + PyTorch 1.6.0 + torchvision 0.7.0
-
+  
+- pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 - [timm==0.4.8/0.4.12](https://github.com/rwightman/pytorch-image-models)
 
 - [deepspeed==0.5.8](https://github.com/microsoft/DeepSpeed)
